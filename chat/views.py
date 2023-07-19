@@ -10,46 +10,40 @@ from django.db.models import Q
 from .utils import add_unread_message_to_receiver
 
 
-@api_view(['GET'])
-@login_required()
-def get_message(request, message_id: int) -> JsonResponse:
+@api_view(['GET', 'DELETE'])
+@login_required(RETURN_USER=True)
+def message(request, user, message_id: int) -> JsonResponse:
     """
-    Retrieve a specific message by its ID.
-    
-    Parameters:
-        - message_id (int): The ID of the message to retrieve.
-    
-    Permissions:
-        - Requires the user to be either the sender or receiver of the message.
-    
-    Returns:
-        - JsonResponse: JSON response containing the serialized message object.
-    """
-    
-    message = get_object_or_404(Message, id=message_id)
-    message_serializer = MessageSerializer(message)
-    return JsonResponse(message_serializer.data)
+    Get or delete a specific message by its ID.
 
-
-@api_view(['DELETE'])
-@login_required() 
-def delete_message(request, message_id: int) -> HttpResponse:
-    """
-    Delete a specific message by its ID.
-    
     Parameters:
-        - message_id (int): The ID of the message to delete.
-    
+        - request (HttpRequest): The HTTP request object.
+        - user (Users): The authenticated user object.
+        - message_id (int): The ID of the message to retrieve or delete.
+
     Permissions:
-        - Requires the user to be either the sender or receiver of the message.
-    
+        - Requires the user to be the sender or the receiver.
+        - Requires the user to be the sender or receiver of the message.
+
     Returns:
-        - HttpResponse: HTTP response indicating the successful deletion of the message.
+        - JsonResponse or HttpResponse: JSON response containing the serialized message object for GET request.
+                                        HTTP response indicating the successful deletion for DELETE request.
     """
     message = get_object_or_404(Message, id=message_id)
-    message.delete()
-    return HttpResponse("successfully deleted message", status=status.HTTP_204_NO_CONTENT)
 
+    if message.sender.id != user.id and message.receiver.id != user.id:
+        return HttpResponse("Uauthorized user", status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.method == "GET":
+
+        message_serializer = MessageSerializer(message)
+        return JsonResponse(message_serializer.data)
+    
+    if request.method == "DELETE":
+
+        message.delete()
+        return HttpResponse("successfully deleted message", status=status.HTTP_204_NO_CONTENT)
+    
  
 @api_view(['POST'])
 @login_required(RETURN_USER=True)
